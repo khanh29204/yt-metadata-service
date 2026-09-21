@@ -13,7 +13,8 @@ FROM python:3.12-alpine AS runner
 WORKDIR /app
 
 # apk layer đứng trước COPY để không bị vô hiệu khi sửa code
-# ffmpeg cho các format cần mux
+# ffmpeg cho các format cần mux; uv cho cronjob tự nâng yt-dlp 4h sáng
+COPY --from=ghcr.io/astral-sh/uv:latest /uv /usr/local/bin/uv
 RUN apk add --no-cache ffmpeg
 
 COPY --from=builder /app/.venv ./.venv
