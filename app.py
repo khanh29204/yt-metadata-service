@@ -21,8 +21,8 @@ MIN_ABR_KBPS = 64
 MAX_ABR_KBPS = 128
 
 
-def probe(url: str) -> dict | None:
-    """Chạy yt-dlp -J lấy metadata. Trả None nếu lỗi."""
+def probe(url: str) -> tuple[dict | None, str]:
+    """Chạy yt-dlp -J lấy metadata. Trả (info, stderr) — info None nếu lỗi."""
     try:
         out = subprocess.run(
             [
@@ -30,7 +30,6 @@ def probe(url: str) -> dict | None:
                 "-J",
                 "--no-playlist",
                 "--no-warnings",
-                "--extractor-args", "youtubemusic:",
                 url,
             ],
             capture_output=True,
@@ -38,9 +37,13 @@ def probe(url: str) -> dict | None:
             timeout=60,
             check=True,
         )
-        return json.loads(out.stdout)
-    except (subprocess.CalledProcessError, subprocess.TimeoutExpired, json.JSONDecodeError):
-        return None
+        return json.loads(out.stdout), ""
+    except subprocess.CalledProcessError as e:
+        return None, (e.stderr or "")[-500:]
+    except subprocess.TimeoutExpired:
+        return None, "yt-dlp timeout 60s"
+    except json.JSONDecodeError:
+        return None, "yt-dlp output not JSON"
 
 
 def pick_audio(info: dict) -> dict | None:
@@ -69,10 +72,10 @@ def pick_audio(info: dict) -> dict | None:
 
 @app.get("/api/v1/audio-url")
 def audio_url(url: str = Query(...)):
-    info = probe(url)
+    info, stderr = probe(url)
     if info is None:
         return JSONResponse(
-            {"success": False, "data": None, "error": "yt-dlp failed to fetch"},
+            {"success": False, "data": None, "error": f"yt-dlp failed: {stderr}"},
             status_code=502,
         )
 

@@ -1,4 +1,5 @@
 # --- GIAI ĐOẠN 1: Build (Cài đặt dependencies) ---
+# Lớp này chỉ cache khi pyproject.toml/uv.lock đổi — sửa app.py không phải cài lại
 FROM python:3.12-alpine AS builder
 WORKDIR /app
 
@@ -11,8 +12,9 @@ RUN uv sync --frozen --no-install-project --no-dev
 FROM python:3.12-alpine AS runner
 WORKDIR /app
 
-# yt-dlp là dependency chính của app (CLI) + ffmpeg cho các format cần mux
-RUN apk add --no-cache yt-dlp ffmpeg
+# apk layer đứng trước COPY để không bị vô hiệu khi sửa code
+# ffmpeg cho các format cần mux
+RUN apk add --no-cache ffmpeg
 
 COPY --from=builder /app/.venv ./.venv
 COPY app.py ./
