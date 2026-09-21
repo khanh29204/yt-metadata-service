@@ -9,9 +9,11 @@ API (giữ nguyên contract như bản Rust cũ):
 """
 
 import json
+import os
 import subprocess
+import tempfile
 
-from fastapi import FastAPI, Query
+from fastapi import FastAPI, Header, Query
 from fastapi.responses import JSONResponse
 
 app = FastAPI()
@@ -21,17 +23,29 @@ MIN_ABR_KBPS = 64
 MAX_ABR_KBPS = 128
 
 
-def probe(url: str) -> tuple[dict | None, str]:
+def probe(url: str, cookies_header: str = "") -> tuple[dict | None, str]:
     """Chạy yt-dlp -J lấy metadata. Trả (info, stderr) — info None nếu lỗi."""
+    args = ["yt-dlp", "-J", "--no-playlist", "--no-warnings"]
+    # Cookie YouTube qua env YTDLP_COOKIES_DATA (nội dung cookies.txt paste
+    # từ extension "Get cookies.txt LOCALLY"). yt-dlp cần file → ghi ra tempfile.
+    cookies = os.environ.get("YTDLP_COOKIES_DATA")
+    cookie_file = None
+    if cookies_header:  # client gửi cookie theo request (header X-YT-Cookies)
+        cookies = cookies_header
+    if cookies:
+        cookie_file = tempfile.NamedTemporaryFile("w", suffix=".txt", delete=False)
+        cookie_file.write(cookies)
+        cookie_file.close()
+        args += ["--cookies", cookie_file.name]
+    elif cookies := os.environ.get("YTDLP_COOKIES"):
+        if cookies.startswith("from-browser:"):
+            args += ["--cookies-from-browser", cookies.split(":", 1)[1]]
+        else:
+            args += ["--cookies", cookies]
+    args.append(url)
     try:
         out = subprocess.run(
-            [
-                "yt-dlp",
-                "-J",
-                "--no-playlist",
-                "--no-warnings",
-                url,
-            ],
+            args,
             capture_output=True,
             text=True,
             timeout=60,
@@ -44,6 +58,9 @@ def probe(url: str) -> tuple[dict | None, str]:
         return None, "yt-dlp timeout 60s"
     except json.JSONDecodeError:
         return None, "yt-dlp output not JSON"
+    finally:
+        if cookie_file:
+            os.unlink(cookie_file.name)
 
 
 def pick_audio(info: dict) -> dict | None:
@@ -71,8 +88,11 @@ def pick_audio(info: dict) -> dict | None:
 
 
 @app.get("/api/v1/audio-url")
-def audio_url(url: str = Query(...)):
-    info, stderr = probe(url)
+def audio_url(
+    url: str = Query(...),
+    x_yt_cookies: str | None = Header(default=None),
+):
+    info, stderr = probe(url, x_yt_cookies or "")
     if info is None:
         return JSONResponse(
             {"success": False, "data": None, "error": f"yt-dlp failed: {stderr}"},
