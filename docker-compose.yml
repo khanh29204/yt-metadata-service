@@ -1,0 +1,10 @@
+services:
+  yt-metadata-service:
+    image: ghcr.io/khanh29204/yt-metadata-service:latest
+    container_name: yt_metadata_service
+    ports:
+      - '3001:3001'
+    restart: always
+    # env file (nếu cần cấu hình thêm)
+    env_file:
+      - .env
