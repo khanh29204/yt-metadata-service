@@ -17,9 +17,9 @@ from fastapi.responses import JSONResponse
 
 app = FastAPI()
 
-# Audio-only, bitrate 64–128 kbps
+# Audio-only, bitrate 64–160 kbps (ABR YouTube dao động theo request)
 MIN_ABR_KBPS = 64
-MAX_ABR_KBPS = 128
+MAX_ABR_KBPS = 160
 
 
 def _to_netscape(cookies: str) -> str:
@@ -37,7 +37,7 @@ def _to_netscape(cookies: str) -> str:
 
 def probe(url: str, cookies_header: str = "") -> tuple[dict | None, str]:
     """Chạy yt-dlp -J lấy metadata. Trả (info, stderr) — info None nếu lỗi."""
-    args = ["yt-dlp", "-J", "--no-playlist", "--no-warnings"]
+    args = ["yt-dlp", "-J", "--no-playlist", "--no-warnings", "--js-runtimes", "bun"]
 
     # --extractor-args tùy chỉnh qua env, VD:
     # YTDLP_EXTRACTOR_ARGS="youtube:player_client=web,tv"

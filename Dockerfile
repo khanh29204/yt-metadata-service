@@ -15,14 +15,16 @@ WORKDIR /app
 # apk layer đứng trước COPY để không bị vô hiệu khi sửa code
 # ffmpeg cho các format cần mux; uv cho cronjob tự nâng yt-dlp 4h sáng
 COPY --from=ghcr.io/astral-sh/uv:latest /uv /usr/local/bin/uv
-# ffmpeg cho mux; deno = JS runtime bắt buộc để yt-dlp giải mã player YouTube
+# ffmpeg cho mux; bun = JS runtime bắt buộc để yt-dlp giải mã player YouTube
 # (thiếu nó → "some formats may be missing" + dễ bị bot-check hơn)
-RUN apk add --no-cache ffmpeg curl unzip \
-    && curl -fsSL -o /tmp/deno.zip https://github.com/denoland/deno/releases/latest/download/deno-x86_64-unknown-linux-musl.zip \
-    && unzip -o /tmp/deno.zip -d /usr/local/bin \
-    && rm /tmp/deno.zip \
-    && chmod +x /usr/local/bin/deno \
-    && deno --version
+# Dùng busybox wget/unzip có sẵn — không thêm package apk.
+RUN apk add --no-cache ffmpeg \
+    && wget -qO /tmp/bun.zip https://github.com/oven-sh/bun/releases/download/bun-v1.4.2/bun-linux-x64-musl.zip \
+    && busybox unzip -o /tmp/bun.zip -d /tmp/bunx \
+    && mv /tmp/bunx/bun-linux-x64-musl/bun /usr/local/bin/bun \
+    && rm -rf /tmp/bun.zip /tmp/bunx \
+    && chmod +x /usr/local/bin/bun \
+    && bun --version
 
 COPY --from=builder /app/.venv ./.venv
 COPY app.py ./
