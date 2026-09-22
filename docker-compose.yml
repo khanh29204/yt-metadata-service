@@ -1,24 +1,47 @@
+# Production: GitHub Actions build/push image ghcr.io/<repo>:latest,
+# rồi SSH vào server chạy `docker compose pull && docker compose up -d`.
+# Dev local: `docker compose up -d --build` (tự build thay vì pull).
 services:
-  yt-metadata-service:
+  api:
     image: ghcr.io/khanh29204/yt-metadata-service:latest
-    container_name: yt_metadata_service
+    build: .
     ports:
-      - '3001:3001'
-    restart: always
-    # env file (nếu cần cấu hình thêm)
-    env_file:
-      - .env
-
-  # Cron 4h sáng: tự nâng yt-dlp trong container (YouTube chặn bản cũ)
-  updater:
-    image: docker:cli
-    container_name: yt_metadata_updater
-    restart: always
-    depends_on:
-      - yt-metadata-service
-    volumes:
-      - /var/run/docker.sock:/var/run/docker.sock
+      - "3001:3001"
+    env_file: .env
     environment:
-      # múi giờ cho crond trong container
-      TZ: Asia/Ho_Chi_Minh
-    entrypoint: ["sh", "-c", "echo '0 4 * * * docker exec yt_metadata_service uv pip install --python .venv/bin/python --no-cache -U yt-dlp && docker restart yt_metadata_service' | crontab - && crond -f -l 2"]
+      BGUTIL_URL: http://bgutil:4416
+    # host dùng systemd-resolved (127.0.0.53) → DNS trong container hỏng nếu không override
+    dns: [1.1.1.1, 8.8.8.8]
+    depends_on:
+      - bgutil
+    restart: always
+    # Oracle x86 Always Free (E2.1.Micro: 1 OCPU + 1GB RAM, chia sẻ cho cả stack).
+    # mem_limit là OOM guard bắt buộc: không có nó, burst 30 job yt-dlp/ffmpeg
+    # đồng thời kill luôn node (đã test — xem MAX_CONCURRENCY trong server.ts).
+    cpus: 0.7
+    mem_limit: 512m
+    pids_limit: 256
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://localhost:3001/resolve',{method:'HEAD'}).catch(()=>process.exit(1))"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  # PO token provider (BotGuard) cho yt-dlp — xem github.com/Brainicism/bgutil-ytdlp-pot-provider
+  bgutil:
+    image: brainicism/bgutil-ytdlp-pot-provider:latest
+    dns: [1.1.1.1, 8.8.8.8]
+    restart: always
+    cpus: 0.3
+    mem_limit: 512m
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
