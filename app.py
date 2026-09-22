@@ -4,10 +4,9 @@ Thay thế bản Rust (rusty_ytdl bị YouTube chặn decipher signature):
 dùng yt-dlp CLI có sẵn trên máy — tự xử lý cipher + PO token.
 
 API (giữ nguyên contract như bản Rust cũ):
-  GET /api/v1/audio-url?url=<link>
-    -> {success, data: {title, author, thumbnail, duration_ms, direct_url}, error}
+GET /api/v1/audio-url?url=<link>
+-> {success, data: {title, author, thumbnail, duration_ms, direct_url}, error}
 """
-
 import json
 import os
 import subprocess
@@ -26,12 +25,21 @@ MAX_ABR_KBPS = 128
 def probe(url: str, cookies_header: str = "") -> tuple[dict | None, str]:
     """Chạy yt-dlp -J lấy metadata. Trả (info, stderr) — info None nếu lỗi."""
     args = ["yt-dlp", "-J", "--no-playlist", "--no-warnings"]
+
+    # --extractor-args tùy chỉnh qua env, VD:
+    # YTDLP_EXTRACTOR_ARGS="youtube:player_client=web,tv"
+    # đổi tham số chỉ cần sửa env rồi restart, không cần sửa code
+    extractor_args = os.environ.get("YTDLP_EXTRACTOR_ARGS")
+    if extractor_args:
+        args += ["--extractor-args", extractor_args]
+
     # Cookie YouTube qua env YTDLP_COOKIES_DATA (nội dung cookies.txt paste
     # từ extension "Get cookies.txt LOCALLY"). yt-dlp cần file → ghi ra tempfile.
     cookies = os.environ.get("YTDLP_COOKIES_DATA")
     cookie_file = None
     if cookies_header:  # client gửi cookie theo request (header X-YT-Cookies)
         cookies = cookies_header
+
     if cookies:
         cookie_file = tempfile.NamedTemporaryFile("w", suffix=".txt", delete=False)
         cookie_file.write(cookies)
@@ -42,7 +50,9 @@ def probe(url: str, cookies_header: str = "") -> tuple[dict | None, str]:
             args += ["--cookies-from-browser", cookies.split(":", 1)[1]]
         else:
             args += ["--cookies", cookies]
+
     args.append(url)
+
     try:
         out = subprocess.run(
             args,
@@ -108,6 +118,7 @@ def audio_url(
 
     duration_s = info.get("duration") or 0
     abr = fmt.get("abr")
+
     return {
         "success": True,
         "data": {
