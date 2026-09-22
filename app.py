@@ -22,6 +22,19 @@ MIN_ABR_KBPS = 64
 MAX_ABR_KBPS = 128
 
 
+def _to_netscape(cookies: str) -> str:
+    """Convert chuỗi cookie header 'k=v; k2=v2' sang Netscape cookies.txt."""
+    if "\t" in cookies or cookies.lstrip().startswith("#"):
+        return cookies  # đã là Netscape format
+    lines = ["# Netscape HTTP Cookie File"]
+    for pair in cookies.split(";"):
+        name, _, value = pair.strip().partition("=")
+        if not name:
+            continue
+        lines.append(f".youtube.com\tTRUE\t/\tTRUE\t0\t{name}\t{value}")
+    return "\n".join(lines) + "\n"
+
+
 def probe(url: str, cookies_header: str = "") -> tuple[dict | None, str]:
     """Chạy yt-dlp -J lấy metadata. Trả (info, stderr) — info None nếu lỗi."""
     args = ["yt-dlp", "-J", "--no-playlist", "--no-warnings"]
@@ -33,23 +46,14 @@ def probe(url: str, cookies_header: str = "") -> tuple[dict | None, str]:
     if extractor_args:
         args += ["--extractor-args", extractor_args]
 
-    # Cookie YouTube qua env YTDLP_COOKIES_DATA (nội dung cookies.txt paste
-    # từ extension "Get cookies.txt LOCALLY"). yt-dlp cần file → ghi ra tempfile.
-    cookies = os.environ.get("YTDLP_COOKIES_DATA")
+    # Cookie chỉ từ client (header X-YT-Cookies). yt-dlp cần file Netscape
+    # → convert rồi ghi ra tempfile.
     cookie_file = None
-    if cookies_header:  # client gửi cookie theo request (header X-YT-Cookies)
-        cookies = cookies_header
-
-    if cookies:
+    if cookies_header:
         cookie_file = tempfile.NamedTemporaryFile("w", suffix=".txt", delete=False)
-        cookie_file.write(cookies)
+        cookie_file.write(_to_netscape(cookies_header))
         cookie_file.close()
         args += ["--cookies", cookie_file.name]
-    elif cookies := os.environ.get("YTDLP_COOKIES"):
-        if cookies.startswith("from-browser:"):
-            args += ["--cookies-from-browser", cookies.split(":", 1)[1]]
-        else:
-            args += ["--cookies", cookies]
 
     args.append(url)
 
