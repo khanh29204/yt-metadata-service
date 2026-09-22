@@ -1,20 +1,32 @@
-FROM node:20-slim
+# --- deps: cài node_modules từ lockfile ---
+FROM node:20-alpine AS deps
+WORKDIR /app
+COPY package.json package-lock.json ./
+RUN npm ci
 
-# yt-dlp + plugin bgutil PO token provider; ffmpeg để encode MP3
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    python3 python3-pip ffmpeg \
+# --- build: compile TS -> JS, runtime không cần typescript/tsx ---
+FROM deps AS build
+COPY tsconfig.json ./
+COPY src ./src
+RUN ./node_modules/.bin/tsc --noEmit false --outDir dist
+
+# --- runtime: chỉ node_modules prod + dist; yt-dlp/plugin/ffmpeg qua apk+pip ---
+FROM node:20-alpine AS runtime
+RUN apk add --no-cache python3 py3-pip ffmpeg \
     && pip3 install --break-system-packages --no-cache-dir \
        yt-dlp bgutil-ytdlp-pot-provider \
-    && apt-get purge -y python3-pip && apt-get autoremove -y \
-    && rm -rf /var/lib/apt/lists/*
+    && pip3 uninstall -y --break-system-packages pip wheel setuptools \
+    && apk del py3-pip \
+    && rm -rf /root/.cache
 
 WORKDIR /app
-COPY package.json ./
-RUN npm install --omit=dev && npm install tsx --no-save
+COPY --from=deps /app/node_modules ./node_modules
+COPY --from=build /app/dist ./dist
 
-COPY src ./src
-COPY tsconfig.json ./
+# chạy non-root; cache yt-dlp ghi vào /tmp (writable)
+ENV NODE_ENV=production PORT=3001 XDG_CACHE_HOME=/tmp/.cache
+RUN mkdir -p /tmp/.cache && chown -R node:node /tmp/.cache
+USER node
 
-ENV PORT=3001
 EXPOSE 3001
-CMD ["npx", "tsx", "src/server.ts"]
+CMD ["node", "dist/server.js"]

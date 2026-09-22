@@ -14,3 +14,7 @@ test
 Dockerfile
 docker-compose.yml
 .dockerignore
+node_modules
+dist
+node_modules
+dist
