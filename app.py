@@ -67,17 +67,7 @@ def probe(url: str, cookies_header: str = "") -> tuple[dict | None, str]:
         )
         return json.loads(out.stdout), ""
     except subprocess.CalledProcessError as e:
-        stderr = (e.stderr or "")[-500:]
-        # "Requested format is not available" = YouTube trả về rỗng format
-        # (client bị bot-check) → retry 1 lần với player_client khác.
-        if "Requested format is not available" in stderr:
-            fb = args + ["--extractor-args", "youtube:player_client=android,web_safari"]
-            try:
-                out = subprocess.run(fb, capture_output=True, text=True, timeout=60, check=True)
-                return json.loads(out.stdout), ""
-            except subprocess.CalledProcessError as e2:
-                return None, (e2.stderr or "")[-500:]
-        return None, stderr
+        return None, (e.stderr or "")[-500:]
     except subprocess.TimeoutExpired:
         return None, "yt-dlp timeout 60s"
     except json.JSONDecodeError:

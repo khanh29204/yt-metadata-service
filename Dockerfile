@@ -15,7 +15,14 @@ WORKDIR /app
 # apk layer đứng trước COPY để không bị vô hiệu khi sửa code
 # ffmpeg cho các format cần mux; uv cho cronjob tự nâng yt-dlp 4h sáng
 COPY --from=ghcr.io/astral-sh/uv:latest /uv /usr/local/bin/uv
-RUN apk add --no-cache ffmpeg
+# ffmpeg cho mux; deno = JS runtime bắt buộc để yt-dlp giải mã player YouTube
+# (thiếu nó → "some formats may be missing" + dễ bị bot-check hơn)
+RUN apk add --no-cache ffmpeg curl unzip \
+    && curl -fsSL -o /tmp/deno.zip https://github.com/denoland/deno/releases/latest/download/deno-x86_64-unknown-linux-musl.zip \
+    && unzip -o /tmp/deno.zip -d /usr/local/bin \
+    && rm /tmp/deno.zip \
+    && chmod +x /usr/local/bin/deno \
+    && deno --version
 
 COPY --from=builder /app/.venv ./.venv
 COPY app.py ./
