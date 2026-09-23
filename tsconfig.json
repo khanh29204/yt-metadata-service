@@ -6,7 +6,13 @@
     "strict": true,
     "skipLibCheck": true,
     "noEmit": true,
-    "types": ["node"]
+    "types": [
+      "node"
+    ],
+    "experimentalDecorators": true,
+    "emitDecoratorMetadata": true,
   },
-  "include": ["src"]
+  "include": [
+    "src"
+  ]
 }

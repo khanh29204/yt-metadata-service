@@ -22,8 +22,14 @@ docker compose up --build -d
 | S3_ENDPOINT | | S3-compatible (R2, MinIO): ví dụ `https://<account>.r2.cloudflarestorage.com`; bỏ trống nếu dùng AWS S3 |
 | S3_PUBLIC_BASE | | nếu bucket không public: base URL để sinh link (VD kèm CloudFront); bỏ trống = URL chuẩn `https://bucket.s3.region.amazonaws.com/key` |
 | BGUTIL_URL | | mặc định `http://bgutil:4416` (service trong compose) |
+| MONGO_URL | | mặc định `mongodb://mongo:27017/yt-metadata` — lưu bền metadata bài hát |
+| REDIS_URL | | mặc định `redis://redis:6379` — cache nóng metadata, TTL 1 ngày (`REDIS_TTL_S`) |
 | MAX_DURATION_S | | mặc định 900 (15 phút), quá → 413 |
 | PORT | | mặc định 3001 |
+
+Lookup thứ tự: Redis → MongoDB → S3 (HEAD) → tải mới. Mongo là source of truth
+(`songs`: videoId, title, artist, thumbnail, durationMs, s3Key, s3Url — không lưu
+stream link vì MP3 đã nằm trên S3); Redis chết/fall-back không làm fail request.
 
 ## Test
 
