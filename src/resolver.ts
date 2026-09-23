@@ -97,20 +97,25 @@ export class ResolverService {
       return song;
     }
 
-    // 4. Tải + encode + upload
+    // 4. Tải + encode + upload — MỘT lần chạy yt-dlp (info + download gộp)
     const dir = await mkdtemp(`${tmpdir()}/yt-`);
     let info;
+    let source;
     try {
       await this.limited(async () => {
-        info = await this.youtube.info(videoId);
+        const t0 = Date.now();
+        ({ source, info } = await this.youtube.downloadAudio(videoId, dir));
+        const tDlp = Date.now() - t0;
         const durationS = info.duration ?? 0;
         if (!durationS || !info.formats?.some((f) => f.acodec && f.acodec !== "none"))
           throw new HttpError(415, "no audio stream available");
         if (durationS > this.config.maxDurationS)
           throw new HttpError(413, `video too long: ${Math.round(durationS)}s (max ${this.config.maxDurationS}s)`);
-        const source = await this.youtube.downloadAudio(videoId, dir);
         const mp3 = await this.encoder.toMp3(source, dir);
+        console.log(`yt-dlp ${tDlp}ms, encode ${Date.now() - t0 - tDlp}ms`);
+        const t2 = Date.now();
         await this.storage.put(s3Key, mp3);
+        console.log(`s3 put ${(Date.now() - t2) / 1000 | 0}s`);
       });
     } finally {
       await rm(dir, { recursive: true, force: true });

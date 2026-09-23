@@ -88,13 +88,16 @@ export class YtDlpService {
     );
   }
 
-  /** Tải audio-only tốt nhất, trả path file nguồn. */
-  async downloadAudio(videoId: string, dir: string): Promise<string> {
+  /** Tải audio-only + metadata trong MỘT lần chạy (tiết kiệm 1 vòng webpage/PO token/EJS). */
+  async downloadAudio(videoId: string, dir: string): Promise<{ source: string; info: VideoInfo }> {
     const source = path.join(dir, "source");
-    await this.run("yt-dlp", [
-      "-f", "ba/b", ...this.baseArgs(), "-o", source,
+    const stdout = await this.run("yt-dlp", [
+      "-f", "ba/b", "--print-json", "--no-simulate",
+      ...this.baseArgs(), "-o", source,
       `https://www.youtube.com/watch?v=${videoId}`,
     ]);
-    return source;
+    // stdout: JSON info in SAU khi tải xong (dòng JSON cuối)
+    const line = stdout.trim().split("\n").pop() ?? "";
+    return { source, info: JSON.parse(line) as VideoInfo };
   }
 }
