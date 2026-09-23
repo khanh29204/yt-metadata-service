@@ -46,7 +46,12 @@ export class StorageService {
       "x-amz-content-sha256": payloadHash,
       "x-amz-date": amzDate,
     };
-    if (body) headers["content-length"] = String(body.length);
+    if (body) {
+      headers["content-length"] = String(body.length);
+      // browser mở link trực tiếp sẽ PHÁT nhạc thay vì tải file
+      headers["content-type"] = "audio/mpeg";
+      headers["content-disposition"] = "inline";
+    }
 
     // canonicalHeaders: mỗi dòng kết thúc \n, join bằng "" — rồi join("\n") tạo
     // dòng trống trước signedHeaders (chuẩn SigV4; lệch 1 \n = SignatureDoesNotMatch)
