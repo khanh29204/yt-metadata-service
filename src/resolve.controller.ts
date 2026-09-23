@@ -21,7 +21,10 @@ export class ResolveController {
     private readonly config: ConfigService,
   ) {}
 
-  async resolve(body: unknown): Promise<{ status: number; body: Record<string, unknown> }> {
+  async resolve(
+    body: unknown,
+    onStep?: (step: string) => void,
+  ): Promise<{ status: number; body: Record<string, unknown> }> {
     const input = (body as { videoId?: unknown; url?: unknown } | null)?.videoId ??
       (body as { url?: unknown } | null)?.url;
     if (typeof input !== "string" || !input)
@@ -32,7 +35,7 @@ export class ResolveController {
     if (!this.config.s3.bucket) return { status: 500, body: { error: "S3_BUCKET not configured" } };
 
     try {
-      const m = await this.resolver.resolve(videoId);
+      const m = await this.resolver.resolve(videoId, onStep);
       return {
         status: 200,
         body: {

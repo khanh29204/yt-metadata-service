@@ -74,7 +74,8 @@ export class ResolverService {
     };
   }
 
-  async resolve(videoId: string): Promise<Meta> {
+  async resolve(videoId: string, onStep?: (step: string) => void): Promise<Meta> {
+    const step = onStep ?? (() => {});
     const s3Key = this.s3KeyFor(videoId);
 
     // 1. Redis cache nóng
@@ -89,6 +90,7 @@ export class ResolverService {
     }
 
     // 3. MP3 đã có trên S3 nhưng chưa có record? (VD DB mới setup, S3 cũ)
+    step("s3-check");
     if (await this.storage.has(s3Key)) {
       console.log(`cache hit: ${s3Key}`);
       const song = this.toSong(videoId, await this.youtube.info(videoId), s3Key);
@@ -104,6 +106,7 @@ export class ResolverService {
     try {
       await this.limited(async () => {
         const t0 = Date.now();
+        step("downloading");
         ({ source, info } = await this.youtube.downloadAudio(videoId, dir));
         const tDlp = Date.now() - t0;
         const durationS = info.duration ?? 0;
@@ -111,8 +114,10 @@ export class ResolverService {
           throw new HttpError(415, "no audio stream available");
         if (durationS > this.config.maxDurationS)
           throw new HttpError(413, `video too long: ${Math.round(durationS)}s (max ${this.config.maxDurationS}s)`);
+        step("encoding");
         const mp3 = await this.encoder.toMp3(source, dir);
         console.log(`yt-dlp ${tDlp}ms, encode ${Date.now() - t0 - tDlp}ms`);
+        step("uploading");
         const t2 = Date.now();
         await this.storage.put(s3Key, mp3);
         console.log(`s3 put ${(Date.now() - t2) / 1000 | 0}s`);
