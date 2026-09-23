@@ -1,5 +1,5 @@
 # --- deps: cài node_modules từ lockfile ---
-FROM node:20-alpine AS deps
+FROM node:22-alpine AS deps
 WORKDIR /app
 COPY package.json package-lock.json ./
 RUN npm ci
@@ -11,10 +11,11 @@ COPY src ./src
 RUN ./node_modules/.bin/tsc --noEmit false --outDir dist
 
 # --- runtime: chỉ node_modules prod + dist; yt-dlp/plugin qua pip, ffmpeg static 2.7MB ---
-FROM node:20-alpine AS runtime
+# node ≥22 để làm JS runtime cho EJS challenge solver của yt-dlp
+FROM node:22-alpine AS runtime
 RUN apk add --no-cache python3 py3-pip \
     && pip3 install --break-system-packages --no-cache-dir \
-       yt-dlp bgutil-ytdlp-pot-provider \
+       "yt-dlp[default]" bgutil-ytdlp-pot-provider \
     && pip3 uninstall -y --break-system-packages pip wheel setuptools \
     && apk del py3-pip \
     && rm -rf /root/.cache

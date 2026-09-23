@@ -75,6 +75,7 @@ export class YtDlpService {
   private baseArgs() {
     return [
       "--no-playlist", "--no-warnings",
+      "--js-runtimes", "node", // EJS challenge solver dùng node (≥22) có sẵn trong image
       "--extractor-args", `youtubepot-bgutilhttp:base_url=${this.config.bgutilUrl}`,
       ...this.cookieArgs,
     ];
