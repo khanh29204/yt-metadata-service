@@ -23,7 +23,7 @@ export class ResolveController {
 
   async resolve(
     body: unknown,
-    onStep?: (step: string) => void,
+    onStep?: (step: string, pct?: number) => void,
   ): Promise<{ status: number; body: Record<string, unknown> }> {
     const input = (body as { videoId?: unknown; url?: unknown } | null)?.videoId ??
       (body as { url?: unknown } | null)?.url;

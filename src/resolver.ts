@@ -74,7 +74,7 @@ export class ResolverService {
     };
   }
 
-  async resolve(videoId: string, onStep?: (step: string) => void): Promise<Meta> {
+  async resolve(videoId: string, onStep?: (step: string, pct?: number) => void): Promise<Meta> {
     const step = onStep ?? (() => {});
     const s3Key = this.s3KeyFor(videoId);
 
@@ -107,7 +107,7 @@ export class ResolverService {
       await this.limited(async () => {
         const t0 = Date.now();
         step("downloading");
-        ({ source, info } = await this.youtube.downloadAudio(videoId, dir));
+        ({ source, info } = await this.youtube.downloadAudio(videoId, dir, (pct) => step("downloading", pct)));
         const tDlp = Date.now() - t0;
         const durationS = info.duration ?? 0;
         if (!durationS || !info.formats?.some((f) => f.acodec && f.acodec !== "none"))
@@ -115,7 +115,7 @@ export class ResolverService {
         if (durationS > this.config.maxDurationS)
           throw new HttpError(413, `video too long: ${Math.round(durationS)}s (max ${this.config.maxDurationS}s)`);
         step("encoding");
-        const mp3 = await this.encoder.toMp3(source, dir);
+        const mp3 = await this.encoder.toMp3(source, dir, (pct) => step("encoding", pct));
         console.log(`yt-dlp ${tDlp}ms, encode ${Date.now() - t0 - tDlp}ms`);
         step("uploading");
         const t2 = Date.now();

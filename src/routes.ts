@@ -36,7 +36,7 @@ export function createRouter(): Router {
       const ping = setInterval(() => res.write(": ping\n\n"), 15000);
       req.on("close", () => clearInterval(ping));
       try {
-        const { status, body } = await controller.resolve(input, (step) => send("step", { step }));
+        const { status, body } = await controller.resolve(input, (step, pct) => send("step", { step, pct }));
         if (status === 200) send("done", body);
         else send("error", body);
       } catch {
