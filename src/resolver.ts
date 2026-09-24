@@ -61,12 +61,23 @@ export class ResolverService {
     return `songs/${videoId}/${hash}.mp3`;
   }
 
-  private toSong(videoId: string, info: { title?: string; uploader?: string; channel?: string; duration?: number; thumbnail?: string }, s3Key: string): SongDoc {
+  private toSong(
+    videoId: string,
+    info: {
+      title?: string;
+      uploader?: string;
+      channel?: string;
+      duration?: number;
+      thumbnail?: string;
+    },
+    s3Key: string,
+  ): SongDoc {
     return {
       videoId,
       title: info.title ?? "",
       artist: info.uploader ?? info.channel ?? "",
-      thumbnail: info.thumbnail ?? `https://i.ytimg.com/vi/${videoId}/hqdefault.jpg`,
+      thumbnail:
+        info.thumbnail ?? `https://i.ytimg.com/vi/${videoId}/hqdefault.jpg`,
       durationMs: Math.round((info.duration ?? 0) * 1000),
       s3Key,
       s3Url: this.storage.url(s3Key),
@@ -74,7 +85,10 @@ export class ResolverService {
     };
   }
 
-  async resolve(videoId: string, onStep?: (step: string, pct?: number) => void): Promise<Meta> {
+  async resolve(
+    videoId: string,
+    onStep?: (step: string, pct?: number) => void,
+  ): Promise<Meta> {
     const step = onStep ?? (() => {});
     const s3Key = this.s3KeyFor(videoId);
 
@@ -90,10 +104,14 @@ export class ResolverService {
     }
 
     // 3. MP3 đã có trên S3 nhưng chưa có record? (VD DB mới setup, S3 cũ)
-    step("s3-check");
+    step("check");
     if (await this.storage.has(s3Key)) {
       console.log(`cache hit: ${s3Key}`);
-      const song = this.toSong(videoId, await this.youtube.info(videoId), s3Key);
+      const song = this.toSong(
+        videoId,
+        await this.youtube.info(videoId),
+        s3Key,
+      );
       await this.mongo.save(song);
       void this.cache.setSong(videoId, song);
       return song;
@@ -107,20 +125,28 @@ export class ResolverService {
       await this.limited(async () => {
         const t0 = Date.now();
         step("downloading");
-        ({ source, info } = await this.youtube.downloadAudio(videoId, dir, (pct) => step("downloading", pct)));
+        ({ source, info } = await this.youtube.downloadAudio(videoId, dir));
         const tDlp = Date.now() - t0;
         const durationS = info.duration ?? 0;
-        if (!durationS || !info.formats?.some((f) => f.acodec && f.acodec !== "none"))
+        if (
+          !durationS ||
+          !info.formats?.some((f) => f.acodec && f.acodec !== "none")
+        )
           throw new HttpError(415, "no audio stream available");
         if (durationS > this.config.maxDurationS)
-          throw new HttpError(413, `video too long: ${Math.round(durationS)}s (max ${this.config.maxDurationS}s)`);
+          throw new HttpError(
+            413,
+            `video too long: ${Math.round(durationS)}s (max ${this.config.maxDurationS}s)`,
+          );
         step("encoding");
-        const mp3 = await this.encoder.toMp3(source, dir, (pct) => step("encoding", pct));
+        const mp3 = await this.encoder.toMp3(source, dir, (pct) =>
+          step("encoding", pct),
+        );
         console.log(`yt-dlp ${tDlp}ms, encode ${Date.now() - t0 - tDlp}ms`);
         step("uploading");
         const t2 = Date.now();
         await this.storage.put(s3Key, mp3);
-        console.log(`s3 put ${(Date.now() - t2) / 1000 | 0}s`);
+        console.log(`s3 put ${((Date.now() - t2) / 1000) | 0}s`);
       });
     } finally {
       await rm(dir, { recursive: true, force: true });

@@ -95,13 +95,13 @@ Response là stream `text/event-stream` báo tiến trình; không có flag thì
 
 ```
 event: step
-data: {"step":"s3-check"}
+data: {"step":"check"}
 
 event: step
 data: {"step":"downloading"}
 
 event: step
-data: {"step":"encoding"}
+data: {"step":"encoding","pct":42}
 
 event: step
 data: {"step":"uploading"}
@@ -112,7 +112,7 @@ data: {"videoId":"RKvRLLQtDbg","title":"Lạc Trôi","artist":"Sơn Tùng M-TP",
 
 | Event | Ý nghĩa |
 |---|---|
-| `step` | bước đang xử lý: `s3-check` → `downloading` → `encoding` → `uploading` |
+| `step` | bước đang xử lý: `check` → `downloading` → `encoding` → `uploading`. Field `pct` (0-100, tùy chọn) chỉ xuất hiện ở `encoding` — % encode từ ffmpeg-progress |
 | `done` | hoàn tất, `data` = payload JSON giống response thường |
 | `error` | thất bại, `data` = `{"error": "..."}` |
 
@@ -123,7 +123,7 @@ data: {"videoId":"RKvRLLQtDbg","title":"Lạc Trôi","artist":"Sơn Tùng M-TP",
 **Client React Native** (POST phải dùng fetch + reader, `EventSource` chỉ hỗ trợ GET):
 
 ```js
-async function resolveSse(videoId, onStep) {
+async function resolveSse(videoId, onStep) { // onStep(step, pct?) — pct có ở bước encoding
   const res = await fetch(`${BASE}/resolve?sse=1`, {
     method: "POST",
     headers: { "x-api-key": KEY, "Content-Type": "application/json" },
@@ -143,7 +143,7 @@ async function resolveSse(videoId, onStep) {
         if (line.startsWith("event: ")) event = line.slice(7);
         else if (line.startsWith("data: ") && event) {
           const data = JSON.parse(line.slice(6));
-          if (event === "step") onStep(data.step);
+          if (event === "step") onStep(data.step, data.pct);
           else if (event === "done") return data;      // → metadata + s3Url
           else if (event === "error") throw new Error(data.error);
         }
