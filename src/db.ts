@@ -14,6 +14,8 @@ export interface SongDoc {
   durationMs: number;
   s3Key: string;
   s3Url: string;
+  /** 200 peak 0..1 để vẽ waveform; undefined với bài lưu trước khi có field này. */
+  waveform?: number[];
   createdAt: Date;
 }
 
@@ -25,6 +27,7 @@ const songSchema = new Schema<SongDoc>({
   durationMs: Number,
   s3Key: { type: String, required: true },
   s3Url: { type: String, required: true },
+  waveform: { type: [Number], required: false },
   createdAt: { type: Date, default: Date.now },
 });
 

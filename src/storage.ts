@@ -92,6 +92,13 @@ export class StorageService {
     }
   }
 
+  /** Tải file về buffer (dùng để backfill waveform cho bản ghi cũ). */
+  async get(key: string): Promise<Buffer> {
+    const res = await this.signed("GET", key);
+    if (!res.ok) throw new Error(`S3 GET ${res.status}: ${(await res.text()).slice(-300)}`);
+    return Buffer.from(await res.arrayBuffer());
+  }
+
   async put(key: string, filePath: string): Promise<void> {
     const res = await this.signed("PUT", key, await readFile(filePath));
     if (!res.ok) {

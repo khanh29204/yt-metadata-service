@@ -45,6 +45,7 @@ export class ResolveController {
           thumbnail: m.thumbnail,
           durationMs: m.durationMs,
           s3Url: m.s3Url,
+          ...(m.waveform && { waveform: m.waveform }),
         },
       };
     } catch (e: unknown) {

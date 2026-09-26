@@ -36,9 +36,12 @@ Body: `{"videoId": "..."}` hoặc `{"url": "https://music.youtube.com/watch?v=..
   "artist": "Sơn Tùng M-TP",
   "thumbnail": "https://i.ytimg.com/vi/.../hqdefault.jpg",
   "durationMs": 232888,
-  "s3Url": "https://.../songs/RKvRLLQtDbg/<hash>.mp3"
+  "s3Url": "https://.../songs/RKvRLLQtDbg/<hash>.mp3",
+  "waveform": [0.02, 0.11, 0.47, "..."]
 }
 ```
+
+`waveform`: 200 peak 0..1 để app vẽ sóng nhạc — lấy trong cùng lần decode ffmpeg (pipe PCM mono 8kHz, không decode thêm lần nào).
 
 ### GET /api/v1/audio-url
 
@@ -63,6 +66,7 @@ data: {"videoId":"...","s3Url":"...","title":"..."}
 ```
 
 - Cache hit (Redis/Mongo) → không có step nào, thẳng `event: done`.
+- Bản ghi cũ chưa có `waveform` → nhận `step: backfilling` (có `pct`): tải MP3 từ S3 + decode lại lấy waveform, rồi tự update DB/cache.
 - Lỗi → `event: error` với `{"error": "..."}`.
 - Ping `: ping` mỗi 15s giữ connection qua proxy.
 - Client RN: đọc bằng `EventSource` hoặc `fetch` + stream reader (POST cần fetch+reader).

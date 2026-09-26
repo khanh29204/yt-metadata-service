@@ -31,7 +31,8 @@ URL chấp nhận: `youtube.com/watch?v=`, `music.youtube.com/watch?v=`, `youtu.
   "artist": "Sơn Tùng M-TP",
   "thumbnail": "https://i.ytimg.com/vi/RKvRLLQtDbg/hqdefault.jpg",
   "durationMs": 232888,
-  "s3Url": "https://s3.example.com/locket-music/songs/RKvRLLQtDbg/01d0fe8baeac.mp3"
+  "s3Url": "https://s3.example.com/locket-music/songs/RKvRLLQtDbg/01d0fe8baeac.mp3",
+  "waveform": [0.02, 0.11, 0.47, "..."]
 }
 ```
 
@@ -43,6 +44,7 @@ URL chấp nhận: `youtube.com/watch?v=`, `music.youtube.com/watch?v=`, `youtu.
 | `thumbnail` | string | ảnh đại diện, fallback `i.ytimg.com/vi/<id>/hqdefault.jpg` |
 | `durationMs` | number | thời lượng millisecond (metadata, app tự tính duration thực = filesize/8000) |
 | `s3Url` | string | URL MP3 64kbps CBR, không metadata, tải trực tiếp được |
+| `waveform` | number[]? | 200 peak 0..1 (max amplitude mỗi bucket ~ durationMs/200) để vẽ sóng. Bỏ qua (`undefined`) với bài resolve trước khi có field này — gọi lại khi cần |
 
 **Lỗi**
 
@@ -112,7 +114,7 @@ data: {"videoId":"RKvRLLQtDbg","title":"Lạc Trôi","artist":"Sơn Tùng M-TP",
 
 | Event | Ý nghĩa |
 |---|---|
-| `step` | bước đang xử lý: `check` → `downloading` → `encoding` → `uploading`. Field `pct` (0-100, tùy chọn) chỉ xuất hiện ở `encoding` — % encode từ ffmpeg-progress |
+| `step` | bước đang xử lý: `check` → `downloading` → `encoding` → `uploading`. Riêng với bản ghi cũ chưa có waveform có thể nhận `backfilling` (tải MP3 từ S3 + decode lấy waveform) thay cho các bước tải mới. Field `pct` (0-100, tùy chọn) chỉ xuất hiện ở `encoding` và `backfilling` — % từ ffmpeg-progress |
 | `done` | hoàn tất, `data` = payload JSON giống response thường |
 | `error` | thất bại, `data` = `{"error": "..."}` |
 

@@ -4,8 +4,9 @@
  * Ghi: tải xong thì lưu Mongo (bền) + Redis (nóng).
  */
 import { createHash } from "node:crypto";
-import { mkdtemp, rm } from "node:fs/promises";
+import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
+import path from "node:path";
 import { Injectable } from "./di.js";
 import { HttpError } from "./errors.js";
 import { ConfigService } from "./config.js";
@@ -23,6 +24,7 @@ export interface Meta {
   durationMs: number;
   s3Key: string;
   s3Url: string;
+  waveform?: number[];
 }
 
 @Injectable()
@@ -71,6 +73,7 @@ export class ResolverService {
       thumbnail?: string;
     },
     s3Key: string,
+    waveform?: number[],
   ): SongDoc {
     return {
       videoId,
@@ -81,8 +84,40 @@ export class ResolverService {
       durationMs: Math.round((info.duration ?? 0) * 1000),
       s3Key,
       s3Url: this.storage.url(s3Key),
+      waveform,
       createdAt: new Date(),
     };
+  }
+
+  /**
+   * Bản ghi cũ chưa có waveform: tải MP3 từ S3, decode lấy peaks, update Mongo + Redis.
+   * Lỗi backfill không làm fail request — trả song nguyên trạng.
+   */
+  private async withWaveform(
+    song: SongDoc,
+    onStep?: (step: string, pct?: number) => void,
+  ): Promise<SongDoc> {
+    if (song.waveform) return song;
+    const step = onStep ?? (() => {});
+    const dir = await mkdtemp(`${tmpdir()}/wf-`);
+    try {
+      return await this.limited(async () => {
+        step("backfilling");
+        const file = path.join(dir, "in.mp3");
+        await writeFile(file, await this.storage.get(song.s3Key));
+        const waveform = await this.encoder.waveformFromFile(file, (pct) =>
+          step("backfilling", pct),
+        );
+        const updated = { ...song, waveform };
+        await this.mongo.save(updated);
+        void this.cache.setSong(song.videoId, updated);
+        console.log(`waveform backfilled: ${song.videoId}`);
+        return updated;
+      });
+    } catch (err) {
+      console.error(`waveform backfill failed: ${song.videoId}`, err);
+      return song;
+    }
   }
 
   async resolve(
@@ -94,13 +129,13 @@ export class ResolverService {
 
     // 1. Redis cache nóng
     const cached = await this.cache.getSong(videoId);
-    if (cached) return cached;
+    if (cached) return this.withWaveform(cached, onStep);
 
     // 2. MongoDB (bền)
     const stored = await this.mongo.get(videoId);
     if (stored) {
       void this.cache.setSong(videoId, stored);
-      return stored;
+      return this.withWaveform(stored, onStep);
     }
 
     // 3. MP3 đã có trên S3 nhưng chưa có record? (VD DB mới setup, S3 cũ)
@@ -114,13 +149,15 @@ export class ResolverService {
       );
       await this.mongo.save(song);
       void this.cache.setSong(videoId, song);
-      return song;
+      return this.withWaveform(song, onStep);
     }
 
     // 4. Tải + encode + upload — MỘT lần chạy yt-dlp (info + download gộp)
     const dir = await mkdtemp(`${tmpdir()}/yt-`);
     let info;
     let source;
+    let mp3;
+    let waveform;
     try {
       await this.limited(async () => {
         const t0 = Date.now();
@@ -139,9 +176,9 @@ export class ResolverService {
             `video too long: ${Math.round(durationS)}s (max ${this.config.maxDurationS}s)`,
           );
         step("encoding");
-        const mp3 = await this.encoder.toMp3(source, dir, (pct) =>
+        ({ mp3, waveform } = await this.encoder.toMp3(source, dir, (pct) =>
           step("encoding", pct),
-        );
+        ));
         console.log(`yt-dlp ${tDlp}ms, encode ${Date.now() - t0 - tDlp}ms`);
         step("uploading");
         const t2 = Date.now();
@@ -152,7 +189,7 @@ export class ResolverService {
       await rm(dir, { recursive: true, force: true });
     }
 
-    const song = this.toSong(videoId, info!, s3Key);
+    const song = this.toSong(videoId, info!, s3Key, waveform);
     await this.mongo.save(song);
     void this.cache.setSong(videoId, song);
     return song;
