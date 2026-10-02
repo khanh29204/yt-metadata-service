@@ -6,18 +6,15 @@ Auth: header `x-api-key: <SERVICE_API_KEY>` (bỏ trống `SERVICE_API_KEY` tron
 
 ---
 
-## POST /resolve
+## GET /api/v1/audio-url
 
-Resolve video YouTube thành metadata + URL MP3 trên S3. Idempotent: gọi lại cùng videoId trả ngay từ cache.
+Resolve video YouTube thành metadata + URL MP3 trên S3. Idempotent: gọi lại cùng videoId trả ngay từ cache. Tham số qua query (tiện cho `<Image>`/preload).
 
-**Request** — `Content-Type: application/json`, nhận một trong hai:
+**Request**
 
-```json
-{ "videoId": "RKvRLLQtDbg" }
 ```
-
-```json
-{ "url": "https://music.youtube.com/watch?v=RKvRLLQtDbg" }
+GET /api/v1/audio-url?videoId=RKvRLLQtDbg
+GET /api/v1/audio-url?url=https%3A%2F%2Fyoutu.be%2FRKvRLLQtDbg
 ```
 
 URL chấp nhận: `youtube.com/watch?v=`, `music.youtube.com/watch?v=`, `youtu.be/`, `youtube.com/(embed|shorts|v)/`, hoặc id trần 11 ký tự `[A-Za-z0-9_-]`.
@@ -50,7 +47,7 @@ URL chấp nhận: `youtube.com/watch?v=`, `music.youtube.com/watch?v=`, `youtu.
 
 | Status | Khi nào |
 |---|---|
-| 400 | body thiếu/sai, không parse được videoId |
+| 400 | query thiếu/sai, không parse được videoId |
 | 401 | sai hoặc thiếu `x-api-key` |
 | 413 | video dài hơn 15 phút (`MAX_DURATION_S`) |
 | 415 | video không có stream audio |
@@ -60,34 +57,17 @@ URL chấp nhận: `youtube.com/watch?v=`, `music.youtube.com/watch?v=`, `youtu.
 **Ví dụ**
 
 ```bash
-curl -X POST localhost:3001/resolve \
-  -H 'x-api-key: KEY' -H 'Content-Type: application/json' \
-  -d '{"videoId":"RKvRLLQtDbg"}'
+curl 'localhost:3001/api/v1/audio-url?videoId=RKvRLLQtDbg' \
+  -H 'x-api-key: KEY'
 ```
-
----
-
-## GET /api/v1/audio-url
-
-Phiên bản GET của `/resolve`, tham số qua query (tiện cho `<Image>`/preload, không cần body).
-
-**Request**
-
-```
-GET /api/v1/audio-url?videoId=RKvRLLQtDbg
-GET /api/v1/audio-url?url=https%3A%2F%2Fyoutu.be%2FRKvRLLQtDbg
-```
-
-**Response** — giống `POST /resolve` (200 + cùng JSON, cùng bảng lỗi).
 
 ---
 
 ## SSE mode (`?sse=1`)
 
-Thêm `?sse=1` vào **cả hai** endpoint:
+Thêm `?sse=1` vào endpoint:
 
 ```
-POST /resolve?sse=1
 GET  /api/v1/audio-url?sse=1&videoId=RKvRLLQtDbg
 ```
 
@@ -114,7 +94,7 @@ data: {"videoId":"RKvRLLQtDbg","title":"Lạc Trôi","artist":"Sơn Tùng M-TP",
 
 | Event | Ý nghĩa |
 |---|---|
-| `step` | bước đang xử lý: `check` → `downloading` → `encoding` → `uploading`. Riêng với bản ghi cũ chưa có waveform có thể nhận `backfilling` (tải MP3 từ S3 + decode lấy waveform) thay cho các bước tải mới. Field `pct` (0-100, tùy chọn) chỉ xuất hiện ở `encoding` và `backfilling` — % từ ffmpeg-progress |
+| `step` | bước đang xử lý: `check` → `downloading` → `encoding` → `uploading`; bản ghi cũ chưa có waveform sẽ thấy thêm `backfilling` (+pct). Riêng với bản ghi cũ chưa có waveform có thể nhận `backfilling` (tải MP3 từ S3 + decode lấy waveform) thay cho các bước tải mới. Field `pct` (0-100, tùy chọn) chỉ xuất hiện ở `encoding` và `backfilling` — % từ ffmpeg-progress |
 | `done` | hoàn tất, `data` = payload JSON giống response thường |
 | `error` | thất bại, `data` = `{"error": "..."}` |
 
@@ -122,14 +102,12 @@ data: {"videoId":"RKvRLLQtDbg","title":"Lạc Trôi","artist":"Sơn Tùng M-TP",
 - Connection được giữ bởi comment ping `: ping` mỗi 15s (không qua được proxy cần `Cache-Control: no-cache` — đã set).
 - Status HTTP luôn 200 khi dùng SSE; lỗi thực nằm trong event `error`.
 
-**Client React Native** (POST phải dùng fetch + reader, `EventSource` chỉ hỗ trợ GET):
+**Client React Native** (fetch + reader; `EventSource` chuẩn không thêm header `x-api-key` được):
 
 ```js
 async function resolveSse(videoId, onStep) { // onStep(step, pct?) — pct có ở bước encoding
-  const res = await fetch(`${BASE}/resolve?sse=1`, {
-    method: "POST",
-    headers: { "x-api-key": KEY, "Content-Type": "application/json" },
-    body: JSON.stringify({ videoId }),
+  const res = await fetch(`${BASE}/api/v1/audio-url?sse=1&videoId=${videoId}`, {
+    headers: { "x-api-key": KEY },
   });
   const reader = res.body.getReader();
   const decoder = new TextDecoder();
@@ -154,8 +132,6 @@ async function resolveSse(videoId, onStep) { // onStep(step, pct?) — pct có �
   }
 }
 ```
-
-GET thì đơn giản hơn với `EventSource` (nhớ tự thêm header `x-api-key` — dùng polyfill hỗ trợ header, hoặc fetch+reader như trên).
 
 ---
 

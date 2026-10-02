@@ -1,0 +1,22 @@
+[package]
+name = "yt-metadata-service"
+version = "3.0.0"
+edition = "2021"
+
+[dependencies]
+axum = "0.8"
+tokio = { version = "1", features = ["full"] }
+futures = "0.3"
+mongodb = "3"
+redis = { version = "0.27", features = ["tokio-comp"] }
+object_store = { version = "0.11", features = ["aws"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+serde_urlencoded = "0.7"
+tokio-stream = "0.1"
+sha1_smol = "1"
+
+[profile.release]
+opt-level = 2
+lto = true
+strip = true

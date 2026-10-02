@@ -1,0 +1,10 @@
+{
+  "lastUpdate": "2026-02-13",
+  "mode": "code",
+  "pages": [
+    "openwiki/quickstart.md",
+    "openwiki/architecture.md",
+    "openwiki/api.md",
+    "openwiki/operations.md"
+  ]
+}

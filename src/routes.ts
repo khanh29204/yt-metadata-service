@@ -1,5 +1,5 @@
 /** Router: map HTTP -> controller (thin adapter, giống Nest router). */
-import express, { Router } from "express";
+import { Router, type Request, type Response } from "express";
 import { container } from "./di.js";
 import { ResolveController } from "./resolve.controller.js";
 import { ConfigService } from "./config.js";
@@ -9,8 +9,6 @@ export function createRouter(): Router {
   const config = container.resolve(ConfigService);
   const router = Router();
 
-  router.use(express.json());
-
   // auth đơn giản: header x-api-key (tạm tắt — bật lại khi mở public)
   router.use((req, res, next) => {
     if (!config.apiKey || req.header("x-api-key") === config.apiKey) return next();
@@ -19,7 +17,7 @@ export function createRouter(): Router {
 
   // SSE mode khi ?sse=1: stream bước xử lý (event: step), kết thúc bằng done/error.
   // Không có flag thì trả JSON bình thường.
-  const handle = (input: Record<string, unknown>, req: express.Request, res: express.Response) => {
+  const handle = (input: Record<string, unknown>, req: Request, res: Response) => {
     return (async () => {
       if (req.query.sse !== "1") {
         const { status, body } = await controller.resolve(input);
@@ -47,7 +45,6 @@ export function createRouter(): Router {
     })();
   };
 
-  router.post("/resolve", (req, res) => handle(req.body, req, res));
   router.get("/api/v1/audio-url", (req, res) => handle(req.query, req, res));
 
   return router;
