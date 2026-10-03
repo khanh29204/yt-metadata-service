@@ -12,6 +12,9 @@ pub struct Config {
     pub bgutil_url: String,
     pub yt_cookies: String,
     pub yt_js_runtime: String, // JS runtime cho EJS solver của yt-dlp: quickjs|deno|bun|node
+    /// Allowlist origin cho CORS, phân tách bằng dấu phẩy (VD "https://a.com,https://b.com").
+    /// Rỗng = không set header CORS nào (chỉ same-origin).
+    pub cors_origins: Vec<String>,
     pub mongo_url: String,
     pub redis_url: String,
     pub redis_ttl_s: u64,
@@ -39,6 +42,12 @@ impl Config {
             yt_cookies: env_or("YT_COOKIES", ""),
             // Node hardcode --js-runtimes node (EJS solver cần node ≥22 có sẵn trong image)
             yt_js_runtime: env_or("YT_JS_RUNTIME", "node"),
+            cors_origins: env_or("CORS_ORIGINS", "")
+                .split(',')
+                .map(str::trim)
+                .filter(|s| !s.is_empty())
+                .map(String::from)
+                .collect(),
             mongo_url: env_or("MONGO_URL", "mongodb://mongo:27017/yt-metadata"),
             redis_url: env_or("REDIS_URL", "redis://redis:6379"),
             redis_ttl_s: env_or("REDIS_TTL_S", "86400").parse().unwrap_or(86400),

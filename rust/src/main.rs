@@ -43,6 +43,7 @@ async fn main() {
         .route("/api/v1/audio-url", get(audio_url))
         .route("/health", get(|| async { "ok" }))
         .layer(middleware::from_fn_with_state(app.clone(), auth))
+        .layer(middleware::from_fn_with_state(app.clone(), cors)) // ngoài auth — preflight không mang x-api-key
         .with_state(app);
 
     let listener = tokio::net::TcpListener::bind(("0.0.0.0", port))
@@ -52,8 +53,35 @@ async fn main() {
     axum::serve(listener, router).await.unwrap();
 }
 
-async fn auth(State(app): State<Arc<App>>, req: Request, next: Next) -> Response {
-    // tạm tắt khi SERVICE_API_KEY trống — bật lại khi mở public
+/// CORS: allowlist tĩnh từ CORS_ORIGINS (config). Origin không trong list → không
+/// set header nào. Preflight (OPTIONS) trả 204 ngay, không qua auth.
+async fn cors(State(app): State<Arc<App>>, req: Request, next: Next) -> Response {
+    let origin = req.headers().get(header::ORIGIN).and_then(|v| v.to_str().ok());
+    let allowed = origin.is_some_and(|o| app.cfg.cors_origins.iter().any(|a| a == o));
+    let mut cors_headers = axum::http::HeaderMap::new();
+    if let Some(o) = origin.filter(|_| allowed) {
+        if let Ok(v) = axum::http::HeaderValue::from_str(o) {
+            cors_headers.insert(header::ACCESS_CONTROL_ALLOW_ORIGIN, v);
+            cors_headers.insert(header::VARY, axum::http::HeaderValue::from_static("Origin"));
+        }
+    }
+    if req.method() == axum::http::Method::OPTIONS {
+        cors_headers.insert(
+            header::ACCESS_CONTROL_ALLOW_METHODS,
+            axum::http::HeaderValue::from_static("GET, OPTIONS"),
+        );
+        cors_headers.insert(
+            header::ACCESS_CONTROL_ALLOW_HEADERS,
+            axum::http::HeaderValue::from_static("Content-Type, x-api-key"),
+        );
+        return (StatusCode::NO_CONTENT, cors_headers).into_response();
+    }
+    let mut res = next.run(req).await;
+    res.headers_mut().extend(cors_headers);
+    res
+}
+
+async fn auth(State(app): State<Arc<App>>, req: Request, next: Next) -> Response {    // tạm tắt khi SERVICE_API_KEY trống — bật lại khi mở public
     if !app.cfg.api_key.is_empty() && req.headers().get("x-api-key").map(|v| v.as_bytes()) != Some(app.cfg.api_key.as_bytes()) {
         return (StatusCode::UNAUTHORIZED, r#"{"error":"invalid api key"}"#).into_response();
     }
