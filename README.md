@@ -4,6 +4,8 @@ Microservice cho tính năng music clip của app Locket: nhận videoId/link Yo
 
 Idempotent: bài nào đã có trên S3 thì trả ngay, không tải lại.
 
+> **⚠️ Source code hiện tại là [rust/](rust/README.md)** (Rust + axum, port 1:1 từ bản Node). Thư mục `src/` (Node.js/TypeScript) **không còn được bảo trì** — chỉ giữ lại làm tham khảo. CI/CD build image từ `rust/Dockerfile`.
+
 ## Kiến trúc
 
 ```
@@ -19,9 +21,9 @@ app Locket ──► POST /resolve
 ```
 
 - **DI kiểu NestJS**: mini container tự viết (`src/di.ts`, `@Injectable()` + `reflect-metadata`), constructor injection.
-- **Chia lớp**: `routes.ts` (router) → `resolve.controller.ts` (validate/map lỗi) → `resolver.ts` (orchestration) → các service: `ytdlp.ts`, `encoder.ts`, `storage.ts` (S3 SigV4 tự ký bằng `node:crypto`, không dùng AWS SDK), `db.ts` (mongoose), `cache.ts` (redis).
+- **Chia lớp** *(bản Node cũ, đã ngừng bảo trì — logic tương đương giờ nằm ở `rust/src/`)*: `routes.ts` (router) → `resolve.controller.ts` (validate/map lỗi) → `resolver.ts` (orchestration) → các service: `ytdlp.ts`, `encoder.ts`, `storage.ts` (S3 SigV4 tự ký bằng `node:crypto`, không dùng AWS SDK), `db.ts` (mongoose), `cache.ts` (redis).
 - **Semaphore** giới hạn yt-dlp/ffmpeg chạy đồng thời (`MAX_CONCURRENCY`, mặc định 2) chống OOM trên VM 1GB; job dư xếp hàng.
-- **Image**: multi-stage, `node:22-alpine` (node ≥22 làm JS runtime cho EJS challenge solver của yt-dlp), ffmpeg static musl 2.7MB, cuối cùng ~380MB.
+- **Image** *(bản Node cũ)*: multi-stage, `node:22-alpine` (node ≥22 làm JS runtime cho EJS challenge solver của yt-dlp), ffmpeg static musl 2.7MB, cuối cùng ~380MB. Bản Rust (`rust/Dockerfile`): alpine + bun, nhẹ hơn — xem [rust/README.md](rust/README.md).
 
 ## API
 
