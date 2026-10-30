@@ -15,21 +15,32 @@ RUN touch src/main.rs && cargo build --release
 #     có build musl chính thức, nên image vẫn là alpine) ---
 FROM alpine:3.20
 ARG BUN_VERSION=bun-v1.4.2
+ARG TARGETARCH
 RUN apk add --no-cache python3 py3-pip wget ca-certificates unzip \
     && pip3 install --break-system-packages --no-cache-dir \
        "yt-dlp[default]" bgutil-ytdlp-pot-provider \
     && pip3 uninstall -y --break-system-packages pip wheel setuptools \
     && apk del py3-pip \
     && rm -rf /root/.cache \
+    && BUN_ARCH=$([ "$TARGETARCH" = "arm64" ] && echo "aarch64" || echo "x64") \
     && wget -qO /tmp/bun.zip \
-       "https://github.com/oven-sh/bun/releases/download/${BUN_VERSION}/bun-linux-x64-musl.zip" \
+       "https://github.com/oven-sh/bun/releases/download/${BUN_VERSION}/bun-linux-${BUN_ARCH}-musl.zip" \
     && unzip -o /tmp/bun.zip -d /tmp/bun \
-    && mv /tmp/bun/bun-linux-x64-musl/bun /usr/local/bin/bun \
+    && mv /tmp/bun/bun-linux-${BUN_ARCH}-musl/bun /usr/local/bin/bun \
     && chmod +x /usr/local/bin/bun \
     && bun --version \
     && rm -rf /tmp/bun /tmp/bun.zip
-COPY ffmpeg /usr/local/bin/ffmpeg
-RUN chmod +x /usr/local/bin/ffmpeg && ffmpeg -version | head -1
+COPY ffmpeg /usr/local/bin/ffmpeg-amd64
+COPY ffmpeg-arm64 /usr/local/bin/ffmpeg-arm64
+RUN if [ "$TARGETARCH" = "arm64" ]; then \
+        mv /usr/local/bin/ffmpeg-arm64 /usr/local/bin/ffmpeg; \
+        rm /usr/local/bin/ffmpeg-amd64; \
+    else \
+        mv /usr/local/bin/ffmpeg-amd64 /usr/local/bin/ffmpeg; \
+        rm /usr/local/bin/ffmpeg-arm64; \
+    fi \
+    && chmod +x /usr/local/bin/ffmpeg \
+    && ffmpeg -version | head -1
 
 COPY --from=build /app/target/release/yt-metadata-service /usr/local/bin/yt-metadata-service
 
